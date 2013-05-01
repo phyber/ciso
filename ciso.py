@@ -8,16 +8,17 @@ import zlib
 CISO_MAGIC = 0x4F534943 # CISO
 CISO_HEADER_SIZE = 0x18 # 24
 CISO_BLOCK_SIZE = 0x800 # 2048
-CISO_HEADER_FMT = '<LLQLBBxx'
+CISO_HEADER_FMT = '<LLQLBBxx' # Little endian
 CISO_WBITS = -15 # Maximum window size, suppress gzip header check.
 CISO_PLAIN_BLOCK = 0x80000000
 
-assert(struct.calcsize(CISO_HEADER_FMT) == CISO_HEADER_SIZE)
+#assert(struct.calcsize(CISO_HEADER_FMT) == CISO_HEADER_SIZE)
 
 def get_terminal_size(fd=sys.stdout.fileno()):
 	try:
 		import fcntl, termios
-		hw = struct.unpack("hh", fcntl.ioctl(fd, termios.TIOCGWINSZ, '1234'))
+		hw = struct.unpack("hh", fcntl.ioctl(
+			fd, termios.TIOCGWINSZ, '1234'))
 	except:
 		try:
 			hw = (os.environ['LINES'], os.environ['COLUMNS'])
@@ -36,15 +37,16 @@ def parse_header_info(header_data):
 			ver, align) = header_data
 	if magic == CISO_MAGIC:
 		ciso = {
-				'magic': magic,
-				'magic_str': ''.join([chr(magic >> i & 0xFF) for i in (0,8,16,24)]),
-				'header_size': header_size,
-				'total_bytes': total_bytes,
-				'block_size': block_size,
-				'ver': ver, #int.from_bytes(ver, byteorder='little'),
-				'align': align, #int.from_bytes(align, byteorder='little'),
-				'total_blocks': int(total_bytes / block_size),
-				}
+			'magic': magic,
+			'magic_str': ''.join(
+				[chr(magic >> i & 0xFF) for i in (0,8,16,24)]),
+			'header_size': header_size,
+			'total_bytes': total_bytes,
+			'block_size': block_size,
+			'ver': ver,
+			'align': align,
+			'total_blocks': int(total_bytes / block_size),
+			}
 		ciso['index_size'] = (ciso['total_blocks'] + 1) * 4
 	else:
 		raise Exception("Not a CISO file.")
@@ -67,12 +69,15 @@ def decompress_cso(infile, outfile):
 			ciso = parse_header_info(header_data)
 
 			# Print some info before we start
-			print("Decompressing '{}' to '{}'".format(infile, outfile))
+			print("Decompressing '{}' to '{}'".format(
+				infile, outfile))
 			for k, v in ciso.items():
 				print("{}: {}".format(k, v))
 
 			# Get the block index
-			block_index = [struct.unpack("<I", fin.read(4))[0] for i in range(0, ciso['total_blocks'] + 1)]
+			block_index = [struct.unpack("<I", fin.read(4))[0]
+					for i in
+					range(0, ciso['total_blocks'] + 1)]
 
 			percent_period = ciso['total_blocks'] / 100
 			percent_cnt = 0
@@ -162,13 +167,12 @@ def compress_iso(infile, outfile, compression_level):
 			print("compress level: {}".format(compression_level))
 
 			write_cso_header(fout, ciso)
-			#block_index = [struct.pack('<B', 0x00) for x in range(0, ciso['total_blocks'] + 1)]
 			block_index = [0x00] * (ciso['total_blocks'] + 1)
 
 			# Write the dummy block index for now.
 			write_block_index(fout, block_index)
 
-			write_pos = fout.tell() #CISO_HEADER_SIZE + len(block_index) #ciso['total_blocks']
+			write_pos = fout.tell()
 			align_b = 1 << ciso['align']
 			align_m = align_b - 1
 
@@ -240,14 +244,3 @@ def main(argv):
 
 if __name__ == '__main__':
 	sys.exit(main(sys.argv))
-
-
-"""
-unsigned char magic[4];                 /* +00 : 'C','I','S','O'                 */^M
-unsigned long header_size;              /* +04 : header size (==0x18)            */^M
-unsigned long long total_bytes; /* +08 : number of original data size    */^M
-unsigned long block_size;               /* +10 : number of compressed block size */^M
-unsigned char ver;                              /* +14 : version 01                      */^M
-unsigned char align;                    /* +15 : align of index value            */^M
-unsigned char rsv_06[2];                /* +16 : reserved                        */^M
-"""
